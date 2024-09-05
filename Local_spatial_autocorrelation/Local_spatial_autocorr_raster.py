@@ -1,3 +1,11 @@
+"""
+2024 - Skye Leake
+
+z1948103@students.niu.edu
+
+Last Updated - 08-21-2024
+"""
+
 # System Imports
 import os
 from typing import Optional
@@ -10,6 +18,7 @@ import cartopy.io.img_tiles as cimgt
 # Geostats Imports
 import libpysal
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 # Data Management Imports
 import pandas as pd  # Tabular data manipulation
@@ -17,6 +26,7 @@ import rioxarray  # Surface data manipulation
 import xarray as xr  # Surface data manipulation
 from libpysal.weights import raster, weights  # Raster weighting
 from matplotlib import colors, patches  # Visulization
+from matplotlib.offsetbox import AnchoredText
 from pysal.explore import esda  # Exploratory spatial analysis
 from pysal.lib import weights  # Spatial weights
 
@@ -123,46 +133,51 @@ def plot_LISA(
         [lc["ns"], lc["HH"], lc["LH"], lc["LL"], lc["HL"]]
     )
 
-    # Set up figure and gridspec with Cartopy projection
-    fig = plt.figure(figsize=(12, 8))
-    gs = fig.add_gridspec(2, 2, height_ratios=[4, 1], hspace=0.3, wspace=0.2)
+    # Cmap for surface data
+    surface_cmap = "Blues"
+
+    # Projection for maps
+    proj = ccrs.LambertConformal(
+        central_longitude=-97.5, central_latitude=38.5, standard_parallels=(38.5, 38.5)
+    )
+
+    # Set up figure and gridspec with Cartopy projectioni
+
+    fig = plt.figure(figsize=(12, 4))  # width, height
+    gs = fig.add_gridspec(2, 2, height_ratios=[11, 1], hspace=0.33, wspace=0.05)
 
     # Top row: Data plots
-    ax1 = fig.add_subplot(gs[0, 0], projection=ccrs.PlateCarree())
-    ax2 = fig.add_subplot(gs[0, 1], projection=ccrs.PlateCarree())
+    ax1 = fig.add_subplot(gs[0, 0], projection=proj)  # projection=ccrs.PlateCarree())
+    ax2 = fig.add_subplot(gs[0, 1], projection=proj)  # projection=ccrs.PlateCarree())
 
     # Bottom row: Colorbar and Legend
     cbar_ax = fig.add_subplot(gs[1, 0])
     legend_ax = fig.add_subplot(gs[1, 1])
 
+    # Main title
+    # fig.suptitle('Main title')
+
     # Common extent and features for both subplots
     common_extent = [
-        surface_data.lon.min(),
-        surface_data.lon.max(),
-        surface_data.lat.min(),
-        surface_data.lat.max(),
+        surface_data.lon.min() + 7,
+        surface_data.lon.max() - 7,
+        surface_data.lat.min() + 1,
+        surface_data.lat.max() - 1,
     ]
-
-    for ax in [ax1, ax2]:
-        # Set extent to match your data
-        ax.set_extent(common_extent, crs=ccrs.PlateCarree())
-        # Add borders and coastlines
-        ax.add_feature(cfeature.BORDERS, linewidth=1.5, edgecolor="black")
-        ax.add_feature(cfeature.STATES, linewidth=0.8, edgecolor="gray")
-        ax.add_feature(cfeature.COASTLINE, linewidth=1.0, edgecolor="black")
-        # Set x and y limits
-        ax.set_ylim(common_extent[2], common_extent[3])
-        ax.set_xlim(common_extent[0], common_extent[1])
 
     # Subplot 1: Surface Data
     surface_plot = surface_data.where(surface_data != surface_data.rio.nodata).plot(
         x="lon",
         y="lat",
+        cmap=surface_cmap,
         ax=ax1,
+        transform=ccrs.PlateCarree(),
         add_colorbar=False,  # We’ll add a separate colorbar
         robust=True,
     )
-    ax1.set_title("Surface values by cell (pixel)")
+    ax1.set_title(
+        "HIST 15-minute 99th Percentile Precipitation"
+    )  # ("Surface values by cell (pixel)")
 
     # Subplot 2: LISA Data
     lisa_plot = (lisa_data.where(lisa_data != lisa_data.nodatavals) / 4).plot(
@@ -170,14 +185,24 @@ def plot_LISA(
         y="lat",
         cmap=lisa_cmap,
         ax=ax2,
+        transform=ccrs.PlateCarree(),
         add_colorbar=False,  # Disable the default colorbar
-        robust=True,
-    )
-    ax2.set_title("Surface value clusters")
+    )  # warning, robust=True argument will completely mess up the results for this plot
+
+    ax2.set_title("Local Spatial Auto Correlation")  # ("Surface value clusters")
 
     # Colorbar for surface data
-    cbar = fig.colorbar(surface_plot, cax=cbar_ax, orientation="horizontal")
-    cbar_ax.set_title("Surface Data Colorbar", fontsize=10)
+    cbar = fig.colorbar(
+        surface_plot,
+        cax=cbar_ax,
+        orientation="horizontal",
+        shrink=0.8,
+    )
+
+    # Deal with cbar title and such
+    cbar_ax.set_title(
+        "Mean Annual Occurances", fontsize=10
+    )  # ("Surface Data Colorbar", fontsize=10)
 
     # Create a legend for LISA data
     handles = [
@@ -192,6 +217,7 @@ def plot_LISA(
         loc="center",
         fontsize=10,
         frameon=False,
+        ncol=2,
     )
     legend_ax.axis("off")  # Hide axis lines and ticks
 
@@ -213,14 +239,49 @@ def plot_LISA(
         else:
             print("Unable to fetch basemap with passed option")
 
+    for i, ax in enumerate([ax1, ax2]):
+        # Set extent to match your data
+        ax.set_extent(common_extent, crs=ccrs.PlateCarree())
+        # Add borders and coastlines
+        ax.add_feature(cfeature.BORDERS, linewidth=1.5, edgecolor="black")
+        ax.add_feature(cfeature.STATES, linewidth=0.8, edgecolor="gray")
+        ax.add_feature(cfeature.COASTLINE, linewidth=1.0, edgecolor="black")
+
+        # Customize gridlines to only show 104°W longitude and label it
+        gl = ax.gridlines(
+            crs=ccrs.PlateCarree(),
+            draw_labels=True,
+            x_inline=False,
+            y_inline=False,
+            linewidth=1.25,
+            color="dimgray",
+            linestyle="--",
+        )
+        gl.right_labels = gl.top_labels = False
+
+        # Use ticker to label only 104°W for longitude
+        gl.xlocator = ticker.FixedLocator([-104])
+        gl.ylocator = ticker.NullLocator()  # Disable all latitude labels
+
+        # Rotate and align labels
+        gl.xlabel_style = {"rotation": 0, "ha": "center"}
+
+        anchored_text = AnchoredText(
+            str({0: "a", 1: "b"}[i]),
+            loc="upper left",
+            pad=0.3,
+            borderpad=0.2,
+        )
+        ax.add_artist(anchored_text)
+
     plt.show()
 
 
 def main() -> None:
-    # path = "./data/ghsl_sao_paulo_1000m_2020.tif"  # Sao Paulo population in 2000, 100m resolution
+    # path = "./data/ghsl_sao_paulo_1000m_2020.tif"  # Sao Paulo population in 2000, 1000m resolution
     # surface = load_dataset(path)
 
-    path = "/media/skye/LEAKE_250gb1/EAE790_Spring24/EOC8p5/DIST_WRFEOC8p5_99-100_WetPeriod_0p254base_15minPeriodCount_for_MAM.nc"
+    path = "/media/skye/LEAKE_250gb1/EAE790_Spring24/HIST/DIST_WRFHIST_99-100_WetPeriod_0p254base_15minPeriodCount_for_DJF.nc"
     surface = load_dataset(path, nc_array_name="PRECIP_PERIOD", reduction_dim="Time")
 
     #    Subset Xarray Data array to rectangle based on lat/lon
@@ -248,6 +309,7 @@ def main() -> None:
     # Aggregate because our processes that make the data are larger than the data
     # themselves (data are overly fine for the application)i
     factor = 21  # 21 is closest to 80km, 8 is 30 km for WRF-BCC
+
     # Perform the aggregation (needed for WRF-BCC)
     surface = aggregate_grid(surface, factor)
 
