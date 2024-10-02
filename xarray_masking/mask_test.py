@@ -7,7 +7,7 @@ import xarray as xr
 from mask_by_state import create_state_intersection_mask
 
 
-def create_conus_test_dataset(start_date="2023-01-01", num_days=10, resolution=0.125):
+def create_conus_test_dataset(start_date="2023-01-01", num_days=10, resolution=1.0):
     # Define CONUS bounding box
     lon_min, lon_max = -124.7844079, -66.9513812
     lat_min, lat_max = 24.7433195, 49.3457868
